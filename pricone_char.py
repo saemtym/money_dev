@@ -36,33 +36,65 @@ import os
 # テンプレートマッチングを行う画像を読み込むクラス
     
 
+match_results = {}
 
 # テンプレートマッチングを行う画像を読み込む
 img = cv2.imread('decks/IMG_3309.png', cv2.IMREAD_COLOR)
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-# 二値化
-_, binary = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
-
-# 輪郭を検出
-contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-# 検出できたらprint
-if contours is not None:
-    print("contours detected")
+_, binary = cv2.threshold(gray, 220, 255, cv2.THRESH_BINARY)
+contours, _ = cv2.findContours(binary, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
 # 輪郭を囲む矩形を取得
 rects = [cv2.boundingRect(contour) for contour in contours]
 
 # 矩形を描画
-for rect in rects:
+for i, rect in enumerate(rects):
     x, y, w, h = rect
-    cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+    aspect_ratio = w / h
+    if 0.9 <= aspect_ratio <= 1.1 and w >= 90 and h >= 90:  # 正方形に近く、72x72ピクセル以上の形状のみを描画
+        cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-# 結果を表示
-cv2.imshow('Image', img)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+        roi = img[y:y+h, x:x+w]
+        # 6/96をかけた値を四隅から除外
+        exclude_val = int(7/96 * min(w, h))
+        roi = roi[exclude_val:-exclude_val, exclude_val:-exclude_val]
+
+        best_match_value = -1
+        best_match_file = None
+        
+        # パターンマッチングを行う
+
+        
+        for filename in os.listdir('chars'):
+            template = cv2.imread(os.path.join('chars', filename), cv2.IMREAD_COLOR)
+
+            # テンプレート画像の4つの端から7ピクセルを除外する
+            h, w, _ = template.shape
+            template = template[7:h-7, 7:w-7]
+
+            res = cv2.matchTemplate(roi,template, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, _ = cv2.minMaxLoc(res)
+            # マッチ度を保存
+            match_results[i] = max_val
+
+            if max_val > best_match_value:
+                best_match_value = max_val
+                best_match_file = filename
+
+        print(f"Best match for rectangle {i} is {best_match_file} with match value {best_match_value}")
+
+# best_match_id = max(match_results, key=match_results.get)
+# best_match_value = match_results[best_match_id]
+
+
+
+
+# 結果を保存
+cv2.imwrite('result.png', img)
+
+
+
+
 
 # # printする
 # for i, rect in enumerate(rects):
